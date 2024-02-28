@@ -1,0 +1,20 @@
+spring:
+#  security:
+#    user:
+#      name: user
+#      password: user123
+#      roles: USERS
+  jpa:
+    show-sql: true
+  main:
+    allow-bean-definition-overriding: true
+  h2:
+    console:
+      enabled: true
+      path: /h2
+
+security:
+  config:
+    prefix: Bearer
+    key: SECRET_KEY
+    expiration: 3600000

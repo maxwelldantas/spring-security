@@ -1,107 +1,67 @@
 package com.github.maxwelldantas.springsecurity.security;
 
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.authentication.configuration.EnableGlobalAuthentication;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import static org.springframework.security.config.Customizer.withDefaults;
+import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
-@Configuration
+@EnableWebSecurity
 @EnableMethodSecurity
-@EnableGlobalAuthentication
+//@DependsOn("webSecurityConfiguration")
+@Configuration
 public class WebSecurityConfig {
 
-    public static final String MANAGERS = "MANAGERS";
-    public static final String USERS = "USERS";
+	private static final String MANAGERS = "MANAGERS";
+	private static final String USERS = "USERS";
+	private static final String[] SWAGGER_WHITELIST = {
+			"/v2/api-docs",
+			"/swagger-resources",
+			"/swagger-resources/**",
+			"/configuration/ui",
+			"/configuration/security",
+			"/swagger-ui.html",
+			"/webjars/**"
+	};
 
-    @Bean
-    public UserDetailsService configure() {
-        UserDetails user = User.builder()
-                .username("user")
-                .password("{noop}user123") // {noop} significa a estratégia de criptografia
-                .roles(USERS)
-                .build();
+	@Bean
+	public PasswordEncoder encoder() {
+		return new BCryptPasswordEncoder();
+	}
 
-        UserDetails admin = User.builder()
-                .username("admin")
-                .password("{noop}master123")
-                .roles(MANAGERS)
-                .build();
+	@Bean
+	public SecurityFilterChain configure(HttpSecurity http) throws Exception {
+		http.addFilterAfter(new JWTFilter(), UsernamePasswordAuthenticationFilter.class)
+				.authorizeHttpRequests(authorize -> authorize
+						.requestMatchers(SWAGGER_WHITELIST).permitAll()
+						.requestMatchers("/h2-console/**").permitAll()
+						.requestMatchers(HttpMethod.POST, "/login").permitAll()
+						.requestMatchers(HttpMethod.POST, "/users").permitAll()
+						.requestMatchers(HttpMethod.GET, "/users").hasAnyRole(USERS, MANAGERS)
+						.requestMatchers("/managers").hasAnyRole(MANAGERS)
+						.anyRequest().authenticated()
+				)
+				.sessionManagement(session -> session.sessionCreationPolicy(STATELESS));
 
-        /*
-        Existem algumas implementações de criptografias utilizadas pelo Spring Security:
-        {bcrypt} for BCryptPasswordEncoder (mais comum);
-        {noop} for NoOpPasswordEncoder;
-        {pbkdf2} for Pbkdf2PasswordEncoder;
-        {scrypt} for SCryptPasswordEncoder;
-        {sha256} for StandardPasswordEncoder.
-        */
+		return http.build();
+	}
 
-        return new InMemoryUserDetailsManager(user, admin);
-    }
-
-/*    protected void configusre(HttpSecurity http) throws Exception {
-        http.authorizeRequests()
-                .antMatchers("/").permitAll()
-                .antMatchers("/login").permitAll()
-                .antMatchers("/managers").hasAnyRole("MANAGERS")
-                .antMatchers("/users").hasAnyRole("USERS","MANAGERS")
-                .anyRequest().authenticated().and().formLogin();
-    }*/
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-                .securityMatcher("/users")
-                .authorizeHttpRequests(authorize -> authorize
-                        .anyRequest().hasAnyRole(USERS, MANAGERS)
-                )
-                .formLogin(withDefaults()).build();
-    }
-
-    @Bean
-    public SecurityFilterChain securityFilterChain2(HttpSecurity http) throws Exception {
-        return http
-                .securityMatcher("/managers")
-                .authorizeHttpRequests(authorize -> authorize
-                        .anyRequest().hasRole(MANAGERS)
-                )
-                .formLogin(withDefaults()).build();
-    }
-
-    @Bean
-    public SecurityFilterChain securityFilterChain3(HttpSecurity http) throws Exception {
-        return http
-                .securityMatcher("/login")
-                .authorizeHttpRequests(authorize -> authorize
-                        .anyRequest().permitAll()
-                )
-                .formLogin(withDefaults()).build();
-    }
-
-/*
-    // Pode usar este também
-    @Bean
-    @Primary
-    protected AuthenticationManagerBuilder configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth.inMemoryAuthentication()
-                .withUser("user")
-                .password("{noop}user123")
-                .roles("USERS")
-                .and()
-                .withUser("admin")
-                .password("{noop}master123")
-                .roles("MANAGERS");
-
-        return auth;
-    }
-*/
+//	@Bean //HABILITANDO ACESSAR O H2-DATABSE NA WEB
+//	public ServletRegistrationBean h2servletRegistration() {
+//		ServletRegistrationBean registrationBean = new ServletRegistrationBean();
+//		registrationBean.addUrlMappings("/h2-console/*");
+//		return registrationBean;
+//	}
 
 }
